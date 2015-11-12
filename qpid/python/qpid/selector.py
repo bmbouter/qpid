@@ -17,8 +17,11 @@
 # under the License.
 #
 import atexit, time, errno, os
-from compat import select, SelectError, set, selectable_waiter
+from compat import select, SelectError, set, selectable_waiter, format_exc
 from threading import Thread, Lock
+from logging import getLogger
+
+log = getLogger("qpid.messaging")
 
 class Acceptor:
 
@@ -98,9 +101,16 @@ class Selector:
 
   def start(self):
     self.stopped = False
-    self.thread = Thread(target=self.run)
+    self.thread = Thread(target=self.run_wrapper)
     self.thread.setDaemon(True)
     self.thread.start();
+
+  def run_wrapper(self):
+    try:
+      self.run()
+    except Exception, e:
+      log.error("qpid.messaging I/O thread has died: %s" % str(e))
+      raise
 
   def run(self):
     while not self.stopped:
