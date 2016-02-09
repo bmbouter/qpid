@@ -201,8 +201,44 @@ class Connection(Endpoint):
     self._waiter = Waiter(self._condition)
     self._modcount = Serial(0)
     self.error = None
+    self._exception_notify_handler = None
     from driver import Driver
     self._driver = Driver(self)
+
+  @synchronized
+  def set_exception_notify_handler(self, handler):
+    """
+    Register a callback that will be invoked when an exception occurs. **Use
+    with caution**: since this callback is invoked in the context of the
+    driver thread, it is not safe to call any of the public messaging APIs
+    from within this callback. The intent of the handler is to provide
+    an efficient way to notify the application that an exception has
+    occurred. This can be useful for those applications that need to
+    schedule a time do handle the error.
+
+    When the callback is called, the object which experienced the exception
+    is passed as the first argument. Use the get_error() or check_error()
+    methods on that object to handle the error. **Caution**: Do not call
+    get_error() or check_error() from inside the callback itself.
+
+    :param handler: the function called when an exception occurred
+    :return: None
+    """
+    self._exception_notify_handler = handler
+
+  def __setattr__(self, key, value):
+    """
+    If the attribute 'error' is being set, also call the exception
+    notify handler, otherwise provide normal __setattr__ functionality.
+
+    :param key: the attribute name being set
+    :param value: the value of the attribute being set
+    :return: None
+    """
+    self.__dict__[key] = value
+    if key == 'error' and value is not None \
+            and self._exception_notify_handler is not None:
+      self._exception_notify_handler(self)
 
   def _wait(self, predicate, timeout=None):
     return self._waiter.wait(predicate, timeout=timeout)
@@ -566,9 +602,45 @@ class Session(Endpoint):
 
     self._lock = connection._lock
     self._msg_received = None
+    self._exception_notify_handler = None
 
   def __repr__(self):
     return "<Session %s>" % self.name
+
+  @synchronized
+  def set_exception_notify_handler(self, handler):
+    """
+    Register a callback that will be invoked when an exception occurs. **Use
+    with caution**: since this callback is invoked in the context of the
+    driver thread, it is not safe to call any of the public messaging APIs
+    from within this callback. The intent of the handler is to provide
+    an efficient way to notify the application that an exception has
+    occurred. This can be useful for those applications that need to
+    schedule a time do handle the error.
+
+    When the callback is called, the object which experienced the exception
+    is passed as the first argument. Use the get_error() or check_error()
+    methods on that object to handle the error. **Caution**: Do not call
+    get_error() or check_error() from inside the callback itself.
+
+    :param handler: the function called when an exception occurred
+    :return: None
+    """
+    self._exception_notify_handler = handler
+
+  def __setattr__(self, key, value):
+    """
+    If the attribute 'error' is being set, also call the exception
+    notify handler, otherwise provide normal __setattr__ functionality.
+
+    :param key: the attribute name being set
+    :param value: the value of the attribute being set
+    :return: None
+    """
+    self.__dict__[key] = value
+    if key == 'error' and value is not None \
+            and self._exception_notify_handler is not None:
+      self._exception_notify_handler(self)
 
   def _wait(self, predicate, timeout=None):
     return self.connection._wait(predicate, timeout=timeout)
@@ -833,6 +905,42 @@ class Sender(Endpoint):
     self.closing = False
     self.closed = False
     self._lock = self.session._lock
+    self._exception_notify_handler = None
+
+  @synchronized
+  def set_exception_notify_handler(self, handler):
+    """
+    Register a callback that will be invoked when an exception occurs. **Use
+    with caution**: since this callback is invoked in the context of the
+    driver thread, it is not safe to call any of the public messaging APIs
+    from within this callback. The intent of the handler is to provide
+    an efficient way to notify the application that an exception has
+    occurred. This can be useful for those applications that need to
+    schedule a time do handle the error.
+
+    When the callback is called, the object which experienced the exception
+    is passed as the first argument. Use the get_error() or check_error()
+    methods on that object to handle the error. **Caution**: Do not call
+    get_error() or check_error() from inside the callback itself.
+
+    :param handler: the function called when an exception occurred
+    :return: None
+    """
+    self._exception_notify_handler = handler
+
+  def __setattr__(self, key, value):
+    """
+    If the attribute 'error' is being set, also call the exception
+    notify handler, otherwise provide normal __setattr__ functionality.
+
+    :param key: the attribute name being set
+    :param value: the value of the attribute being set
+    :return: None
+    """
+    self.__dict__[key] = value
+    if key == 'error' and value is not None \
+            and self._exception_notify_handler is not None:
+      self._exception_notify_handler(self)
 
   def _wakeup(self):
     self.session._wakeup()
@@ -995,6 +1103,42 @@ class Receiver(Endpoint, object):
     self._capacity = 0
     self._set_capacity(options.get("capacity", 0), False)
     self.threshold = 0.5
+    self._exception_notify_handler = None
+
+  @synchronized
+  def set_exception_notify_handler(self, handler):
+    """
+    Register a callback that will be invoked when an exception occurs. **Use
+    with caution**: since this callback is invoked in the context of the
+    driver thread, it is not safe to call any of the public messaging APIs
+    from within this callback. The intent of the handler is to provide
+    an efficient way to notify the application that an exception has
+    occurred. This can be useful for those applications that need to
+    schedule a time do handle the error.
+
+    When the callback is called, the object which experienced the exception
+    is passed as the first argument. Use the get_error() or check_error()
+    methods on that object to handle the error. **Caution**: Do not call
+    get_error() or check_error() from inside the callback itself.
+
+    :param handler: the function called when an exception occurred
+    :return: None
+    """
+    self._exception_notify_handler = handler
+
+  def __setattr__(self, key, value):
+    """
+    If the attribute 'error' is being set, also call the exception
+    notify handler, otherwise provide normal __setattr__ functionality.
+
+    :param key: the attribute name being set
+    :param value: the value of the attribute being set
+    :return: None
+    """
+    super(Receiver, self).__setattr__(key, value)
+    if key == 'error' and value is not None \
+            and self._exception_notify_handler is not None:
+      self._exception_notify_handler(self)
 
   @synchronized
   def _set_capacity(self, c, wakeup=True):
